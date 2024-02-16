@@ -95,6 +95,8 @@ class iEnKS:
     #   * Trouble playing nice with '-N' inflation estimation.
 
     def assimilate(self, HMM, xx, yy):
+        self.name = f'iEnKS_N{self.N}_i{self.nIter}'
+
         Ko = HMM.tseq.Ko
 
         assert HMM.Dyn.noise.C == 0, (

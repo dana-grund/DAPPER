@@ -35,6 +35,8 @@ class EnKF:
     N: int
 
     def assimilate(self, HMM, xx, yy):
+        self.name = f'EnKF_N{self.N}'
+
         # Init
         E = HMM.X0.sample(self.N)
         self.stats.assess(0, E=E)
@@ -370,6 +372,8 @@ class EnKS:
         return E.reshape((N, K, Nx)).transpose([1, 0, 2])
 
     def assimilate(self, HMM, xx, yy):
+        self.name = f'EnKS_N{self.N}'
+
         # Inefficient version, storing full time series ensemble.
         # See iEnKS for a "rolling" version.
         E    = zeros((HMM.tseq.K+1, self.N, HMM.Dyn.M))
@@ -622,6 +626,8 @@ class LETKF:
     mp: bool   = False
 
     def assimilate(self, HMM, xx, yy):
+        self.name = f'LETKF_N{self.N}'
+
         E = HMM.X0.sample(self.N)
         self.stats.assess(0, E=E)
         self.stats.new_series("ad_inf", 1, HMM.tseq.Ko+1)
@@ -853,6 +859,7 @@ class EnKF_N:
     g: int     = 0
 
     def assimilate(self, HMM, xx, yy):
+        self.name = f'EnKF-N_N{self.N}'
         N, N1 = self.N, self.N-1
 
         # Init
