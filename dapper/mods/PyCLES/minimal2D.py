@@ -40,7 +40,7 @@ def call_dummy(x0, params, t, dt):
 # Model
 ############################
 
-model = pycles_model_config(name="minimal1D", prms={})
+model = pycles_model_config(name="minimal2D")
 Nx = model.M = 100
 # Nx = model.M = 25 # 5x5
 Np = model.P = 2
@@ -51,9 +51,8 @@ Dyn = {
     'model': model.step,
     'noise': 0,
 }
-
-dtout = model.infile_specs['dtout']
-tseq = modelling.Chronology(dt=dtout, dko=1, T=dtout, BurnIn=0)
+t_max = 10
+tseq = modelling.Chronology(dt=t_max, dko=1, T=t_max, BurnIn=0)
 
 
 #############################
@@ -93,7 +92,7 @@ def set_X0_and_simulate(hmm, xp):
 # Observation settings
 ############################
 from dapper.mods.utils import name_func, ens_compatible
-def Max_Obs(Nx):
+def Max_Obs(Nx): # XXX not working
     """Scalar max observable
 
     It is not a function of time.
@@ -127,7 +126,7 @@ def Max_Obs(Nx):
 # from Lorenz63/sakov2012
 np.random.seed(325)
 obs_idcs = np.random.choice(np.arange(Nx),size=3)
-print(obs_idcs)
+# print('Observing the following field indices: ',obs_idcs)
 Obs = modelling.partial_Id_Obs(Nx,obs_idcs) # observe full state 
 # Obs = modelling.Id_Obs(Nx) # observe full state 
 # Obs = Max_Obs(Nx)
@@ -147,3 +146,17 @@ HMM = modelling.HiddenMarkovModel(
     sectors=parts,
     LP=LP.default_liveplotters,
 )
+
+############################
+# Summary
+############################
+
+dists_prior = {
+    'PRIOR_MEAN_PARAMS':PRIOR_MEAN_PARAMS,
+    'PRIOR_VAR_PARAMS':PRIOR_VAR_PARAMS,
+    'PRIOR_MEAN_STATE':PRIOR_MEAN_STATE,
+    'PRIOR_VAR_STATE':PRIOR_VAR_STATE,
+    'OBS_VAR':OBS_VAR,
+    'TRUE_PARAMS':TRUE_PARAMS,
+    'TRUE_STATE':TRUE_STATE,
+}
