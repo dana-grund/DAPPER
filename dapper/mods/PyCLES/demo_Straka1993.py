@@ -1,4 +1,4 @@
-print('Importing...')
+print('[demo_Straka1993.py] Importing...')
 from mpl_tools import is_notebook_or_qt as nb
 import argparse
 # print('da')
@@ -7,7 +7,7 @@ import dapper.da_methods as da
 from dapper.mods.PyCLES.Straka1993 import create_HMM, set_X0_and_simulate, Np, dists_prior, plot_xt # incl HMM
 # print('PyCLES')
 from dapper.mods.PyCLES import * # load_xps, print_summary, dists_single_xp, plot_dists
-print('...importing done.')
+print('[demo_Straka1993.py] Importing done.')
 
 def set_up_experiments(N_ens):
     xps = dpr.xpList()
@@ -18,17 +18,17 @@ def set_up_experiments(N_ens):
     '''
     xps += da.EnKF('Sqrt', N_ens, infl=1.04)
     # xps += da.EnKF_N(N_ens, xN=2) # xN for hyperprior coeffs
-    xps += da.iEnKS("Sqrt", N_ens, Lag=1, xN=2, nIter=5, wtol=1e-5)
+    # xps += da.iEnKS("Sqrt", N_ens, Lag=1, xN=2, nIter=5, wtol=1e-5)
     return xps
 
-def launch_experiments(HMM,xps,N_ens):
+def launch_experiments(HMM,xps):
     # HMM.mp = N_ens # one process per member # does not work here! set manually.
     # XXX caution with large ensembles!
     scriptname = HMM.name if nb else __file__
     save_as = xps.launch(
         HMM, scriptname, setup=set_X0_and_simulate,
         mp=False,           # Multiprocessing
-        fail_gently=False,  # Facilitate debugging
+        fail_gently=True,  # Facilitate debugging
         liveplots=False,    # NB: Turn off if running iEnKS
         free=False,         # Don't delete time series (enables replay)
     )
@@ -61,15 +61,19 @@ if __name__=='__main__':
     N_ens = args.N_ens
     obs_type = args.obs_type
 
-    HMM = create_HMM(mp=N_ens, data_dir=data_dir, obs_type=obs_type)
+    print('Call create_HMM...')
+    HMM = create_HMM(mp=N_ens, data_dir=data_dir, obs_type=obs_type) # all members in parallel
 
+    print('Call set_up_experiments...')
     xps = set_up_experiments(N_ens)
     plot_dists_prior(dists_prior, plot_dir, Np)
 
     # plot_obs_examples(HMM,xps,plot_dir)
     
-    save_as = launch_experiments(HMM,xps,N_ens)
+    print('Call launch_experiments...')
+    save_as = launch_experiments(HMM,xps)
     
+    print('Call load_xps...')
     xps = load_xps(save_as)
     print_summary(xps,Np,dists_prior)
 

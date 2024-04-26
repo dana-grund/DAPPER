@@ -14,6 +14,7 @@ import shutil
 data_dir = '/cluster/work/climate/dgrund/working_dir/dpr_data/data_Straka1993/'
 # import dapper.mods as modelling
 # import dapper.tools.liveplotting as LP
+import dapper.tools.multiproc as multiproc
 
 class pycles_model_config:
     '''Interface class.
@@ -34,7 +35,6 @@ class pycles_model_config:
         self.mp    = mp # False or int; set externally
         self.name  = name
         self.p = p if p else data_dir # adapt externally
-        print('self.p ',self.p)
         self.plot_every_member = plot_every_member # plot the data
 
         ## need to be set!
@@ -55,40 +55,38 @@ class pycles_model_config:
         return x_t
     
     def step(self, E, t, dt):
-        """Vector and 2D-array (ens) input, with multiproc for ens case."""
+        """Function needed for Dyn syntax: Dyn = {'model':model.step}
+        Vector and 2D-array (ens) input, with multiproc for ens case."""
         if E.ndim == 1:
+            print('[PyCLES.__init__.py] DAPPER-PyCLES in NON-PARALLEL MODE (one member only)')
             data_dir = self.make_data_dir()
-            return self.step_1(E, t, dt, data_dir)
+            E = self.step_1(E, t, dt, data_dir)
+            return E
         
         if E.ndim == 2:
 
-            print(E.shape)
             member_dirs = self.make_ensemble_dirs(N_ens=E.shape[0])
-            print(member_dirs)
 
-            if self.mp:  # PARALLELIZED:
-                print('DAPPER-PyCLES in PARALLEL MODE')
+            if self.mp > 1:  # PARALLELIZED:
+                print('[PyCLES.__init__.py] DAPPER-PyCLES in PARALLEL MODE')
                 def call_step_1(n):
                     return self.step_1(
                         E[n], t=t, dt=dt, 
                         dir=member_dirs[n]
                     )
-                import dapper.tools.multiproc as multiproc
-                print('Using HMM.mp=',self.mp)
+                print('[PyCLES.__init__.py] Using HMM.mp=',self.mp)
                 with multiproc.Pool(self.mp) as pool:
-                    # E = pool.map(call_step_1, [i for i in range(self.mp)])
                     E = pool.map(lambda x: call_step_1(x), [i for i in range(self.mp)])
-                    # E = pool.map(lambda x: self.step_1(x, t=t, dt=dt), E)
                 E = np.array(E)
             else:  # NON-PARALLELIZED:
-                print('DAPPER-PyCLES in NON-PARALLEL MODE')
+                print('[PyCLES.__init__.py] DAPPER-PyCLES in NON-PARALLEL MODE')
                 for n, x in enumerate(E):
                     print(f'Running ensemble member {n}.')
                     E[n] = self.step_1(
                         x, t, dt, 
                         member_dirs[n]
                     )
-                print('E.shape after non-mp: ',E.shape)
+            print('[PyCLES.__init__.py] E.shape: ',E.shape)
             return E
 
     def make_ensemble_dirs(self, N_ens):
@@ -119,7 +117,7 @@ def load_xps(save_as):
 
 def print_summary(xps, Np, dists_prior):
 
-    print('\nExperiment summary:')
+    print('\n[PyCLES.__init__.py] Experiment summary:')
     print(xps.tabulate_avrgs([
         "rmse.state.a", "rmv.state.a",
         "rmse.param.a", "rmv.param.a",

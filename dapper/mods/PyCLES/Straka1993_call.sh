@@ -20,6 +20,7 @@ source /cluster/work/climate/dgrund/git/dana-grund/doctorate_code/euler/euler_se
 # mkdir $ENS_DIR
 # cd $ENS_DIR
 source parameters.sh
+# echo ENS_DIR = $ENS_DIR
 
 # ### remove old results
 # cd $ENS_DIR
@@ -30,9 +31,24 @@ source parameters.sh
 # cd $PYCLES_DIR
 # CC=mpicc python ${PYCLES_DIR}setup.py build_ext --inplace
 
+F_STATE=300
+if [ $T -lt 300 ]; then
+    F_STATE=$T
+fi
+
 ### generate in_files
-NPROCX=1 # see performance analysis in 23-09-25_SP_sampling/eval_nproc.ipynb
-python $NAMELIST_GENERATOR StableBubble -p $ENS_DIR -np $NPROCX -v $V -d $D -r $R -T $T # -t 
+NPROCX=8 # see performance analysis in 23-09-25_SP_sampling/eval_nproc.ipynb
+python $NAMELIST_GENERATOR StableBubble \
+    -p $ENS_DIR -np $NPROCX \
+    -v $V -d $D \
+    -r $R -T $T \
+    --f_state $F_STATE --f_stats 10 --f_cstats 10 \
+    --meas_locs 10000 0 500 \
+    --meas_locs 10000 0 2000 \
+    --meas_locs 20000 0 500 \
+    --meas_locs 20000 0 2000
+    
+    # -t 
 
 ### define inifle to run
 # cd $ENS_DIR
@@ -42,10 +58,10 @@ python $NAMELIST_GENERATOR StableBubble -p $ENS_DIR -np $NPROCX -v $V -d $D -r $
 # IN_FILE='StableBubble_v75.000d75.000a20.0xr6.0zr2.0zc3.0.in'
 
 ### run one infile
-# echo 'Simulating...'
-python $ENSEMBLE_RUNNER -p $ENS_DIR
+echo 'Simulating...'
+python $ENSEMBLE_RUNNER -p $ENS_DIR > ${ENS_DIR}pycles.out
 # python ${PYCLES_DIR}main.py ${ENS_DIR}${IN_FILE} # if infile is known
-# echo '...simulating done.'
+echo '...simulating done.'
 
 # ### plot
 # echo 'Plotting...'
