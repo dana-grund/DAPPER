@@ -4,7 +4,7 @@ import xarray as xr
 
 import dapper.mods as modelling
 # import dapper.tools.liveplotting as LP
-from dapper.mods.PyCLES import PyCLES_interface
+from dapper.mods.PyCLES import PyCLES_interface, plot_field
 
 ############################
 ### to be replaced by stand-alone code or other package
@@ -20,13 +20,7 @@ from plot_turb_stats import plot_scalar_stats_timeseries, plot_evol
 # Settings (modify)
 ############################
 
-### No = size of the extended model state in DAPPER
-### nx = resolution (number of grid points)in PyCLES
-
 nx, nz = 256, 32    # resolution in pycles fixed to dx=dz=200
-# No = 50             # length of the (dummy state and) obs in dapper -- obs_type=='hor_stripe'
-# No = nx * nz        # length of the (dummy state and) obs in dapper -- obs_type=='full'
-### No = Dyn.M-Np
 Np = 2              # inferred parameters in dapper # SGS v and d
 
 # estimating state and parameters
@@ -246,9 +240,9 @@ def create_Dyn(data_dir,obs_type, t_max, dx=50, No=None):
         Np=Np,
     )
     Dyn = {
-        'M': model.M, # extended state (observations, parameters)
+        'M': model.M, # state size as output by model.step
         'model': model.step,
-        'noise': 0,
+        'noise': 0, # in this implementation: same as obs noise, zero here to avoid double counting
     }
 
     return Dyn
@@ -257,17 +251,22 @@ def create_Dyn(data_dir,obs_type, t_max, dx=50, No=None):
 # Setup and prior
 #############################
 
-def X0(param_mean, param_var, No):
-    # State --> is actually obs here!!!
-    x0 = PRIOR_MEAN_STATE*np.ones(No)
-    C0 = PRIOR_VAR_STATE*np.ones(No)
-    # Append param params
-    x0 = np.hstack([x0, param_mean*np.ones(Np)])
-    C0 = np.hstack([C0, param_var*np.ones(Np)])
+def X0(param_mean, param_var, No=None):
+  
+    # --- parameter-only formulation
+    x0 = param_mean*np.ones(Np)
+    C0 = param_var*np.ones(Np)
+    
+    # --- extended state formulation
+    x0s = PRIOR_MEAN_STATE*np.ones(No)
+    C0s = PRIOR_VAR_STATE*np.ones(No)
+    x0 = np.hstack([x0s,x0])
+    C0 = np.hstack([C0s,C0])
+    
     return modelling.GaussRV(x0, C0)
 
 def set_X0_and_simulate(hmm, xp):
-    No = hmm.Dyn.M-Np
+    No = hmm.Dyn.M-Np # pure parameter estimation: not used here, =0
     hmm.X0 = X0(TRUE_PARAMS, 0, No)
     xx, yy = hmm.simulate() # perfect model data simulation
     hmm.X0 = X0(PRIOR_MEAN_PARAMS, PRIOR_VAR_PARAMS, No)
@@ -311,26 +310,3 @@ def create_HMM(data_dir=None, obs_type='full', t_max=900, dx=50):
     )
 
     return HMM
-
-############################
-# Plotting
-############################
-
-def plot_field(x_t,plot_dir,name_add=''):
-    # full field
-    
-    field = x_t.reshape((nx,nz)) if len(x_t.shape) == 1 else x_t
-    # x_space = np.arange(25.6,36,0.2) # km
-    # z_space = np.arange(0,6.4,0.2) # km
-    
-    plt.figure(figsize=(8,5))
-    plt.imshow(field[nx//2:,:].T, origin='lower')
-    plt.colorbar()
-    # plt.xlabel('x [km]')
-    # plt.xlabel('z [km]')
-    plt.title('data x_t at final time')
-    plt.tight_layout()
-    name = f'{plot_dir}fig-data_{name_add}.png'
-    plt.savefig(name)
-    print('Saved figure ',name)
-    plt.show()

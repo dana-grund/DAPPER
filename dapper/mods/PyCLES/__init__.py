@@ -10,9 +10,6 @@ import shutil
 import time
 
 default_dir = '/cluster/work/climate/dgrund/working_dir/dpr_data/data_Straka1993/'
-# import dapper.mods as modelling
-# import dapper.tools.liveplotting as LP
-# import dapper.tools.multiproc as multiproc
 
 class PyCLES_interface:
     '''Interface class.
@@ -23,7 +20,6 @@ class PyCLES_interface:
     def __init__(
         self, 
         name,
-        # mp=False, 
         plot_every_member=False, 
         data_dir=None,
         obs_func=None, 
@@ -41,7 +37,7 @@ class PyCLES_interface:
         self.t_max = t_max
         self.dx = dx
         
-        # DAPPER
+        # dimensions
         assert No is not None and Np is not None, "No and Np need to be set!"
         # self.Nx = Nx # state ### not used
         self.No = No # observations
@@ -58,8 +54,13 @@ class PyCLES_interface:
     ):        
         # --- split state and parameters
         assert len(E_1) == self.M
+        
+        # --- extended state formulation
         x0 = E_1[:self.No]
         params = E_1[self.No:]
+        
+        # --- parameter-only formulation
+        # params = E_1
         
         v,d = params
         specs = {
@@ -96,10 +97,14 @@ class PyCLES_interface:
         
         # --- observe
         obs_t = self.obs_func(results_file, dir, self.plot_every_member)        
-
-        # --- concatenate state
-        extended_state = np.concatenate([obs_t.ravel(),params])
-        return extended_state # 1D array
+        
+        # --- parameter-only formulation
+        state = obs_t.ravel()
+        
+        # --- extended state formulation
+        state = np.concatenate([state,params])
+        
+        return state # 1D array
 
     def step(self, E, t, dt):
         """Function needed for Dyn syntax: Dyn = {'model':model.step}
@@ -116,11 +121,13 @@ class PyCLES_interface:
 
             self.member_dirs = self.make_member_dirs(N_ens=E.shape[0])
             
+            # --- start all member simulations
             params_list = []
             for n,dir in enumerate(self.member_dirs):
                 params = self.start_simulation(E[n], t=t, dt=dt, dir=dir)
                 params_list.append(params)
             
+            # --- wait for completion and pick them up one by one
             E = []
             for n,dir in enumerate(self.member_dirs):
                 E.append(
@@ -333,4 +340,23 @@ def plot_dists_xps_onerow(xps, dists_prior, plot_dir, Np, post=True):
     plt.legend()
     plt.tight_layout()
     plt.savefig(plot_dir+'fig-dists_onerow.png')
+    plt.show()
+
+def plot_field(x_t,plot_dir,name_add=''):
+    # full field
+    
+    field = x_t.reshape((nx,nz)) if len(x_t.shape) == 1 else x_t
+    # x_space = np.arange(25.6,36,0.2) # km
+    # z_space = np.arange(0,6.4,0.2) # km
+    
+    plt.figure(figsize=(8,5))
+    plt.imshow(field[nx//2:,:].T, origin='lower')
+    plt.colorbar()
+    # plt.xlabel('x [km]')
+    # plt.xlabel('z [km]')
+    plt.title('data x_t at final time')
+    plt.tight_layout()
+    name = f'{plot_dir}fig-data_{name_add}.png'
+    plt.savefig(name)
+    print('Saved figure ',name)
     plt.show()

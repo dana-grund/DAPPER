@@ -21,7 +21,7 @@ import dapper.mods.PyCLES.Straka1993 as S93
 tt = time.time()
 print(f'[demo_Straka1993.py] Importing Straka1993 took {tt-t:.2f} seconds.')
 
-from dapper.mods.PyCLES import print_summary, plot_dists_prior, plot_dists_xps_onerow
+from dapper.mods.PyCLES import print_summary, plot_dists_prior, plot_dists_xps_onerow, plot_field
 t = time.time()
 print(f'[demo_Straka1993.py] Importing PyCLES took {t-tt:.2f} seconds.')
 
@@ -57,7 +57,7 @@ def launch_experiments(HMM,xps):
 
 def plot_obs_examples(HMM,xps,dir):
     HMM, xx, yy = S93.set_X0_and_simulate(HMM,xps[0])
-    S93.plot_field(yy[0],dir)
+    plot_field(yy[0],dir)
 
 if __name__=='__main__':
     
