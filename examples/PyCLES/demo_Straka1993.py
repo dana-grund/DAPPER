@@ -1,7 +1,6 @@
-### XXX MOVE
-
 import time
 s = time.time()
+
 print('[demo_Straka1993.py] Importing...')
 import os
 from mpl_tools import is_notebook_or_qt as nb
@@ -9,20 +8,23 @@ import argparse
 import numpy as np
 t = time.time()
 print(f'[demo_Straka1993.py] Importing packages took {t-s:.2f} seconds.')
-# import dapper as dpr 
+
 from dapper import set_seed, xpList, load_xps, xpSpace
 tt = time.time()
 print(f'[demo_Straka1993.py] Importing dapper took {tt-t:.2f} seconds.')
+
 import dapper.da_methods as da
 t = time.time()
 print(f'[demo_Straka1993.py] Importing da_methods took {t-tt:.2f} seconds.')
-# from dapper.mods.PyCLES.Straka1993 import create_HMM, set_X0_and_simulate, Np, dists_prior, plot_field
+
 import dapper.mods.PyCLES.Straka1993 as S93
 tt = time.time()
 print(f'[demo_Straka1993.py] Importing Straka1993 took {tt-t:.2f} seconds.')
+
 from dapper.mods.PyCLES import print_summary, plot_dists_prior, plot_dists_xps_onerow
 t = time.time()
 print(f'[demo_Straka1993.py] Importing PyCLES took {t-tt:.2f} seconds.')
+
 print('[demo_Straka1993.py] Importing done.')
 
 np.random.seed(325)
