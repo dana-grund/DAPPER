@@ -1,17 +1,36 @@
+### XXX MOVE
+
+import time
+s = time.time()
 print('[demo_Straka1993.py] Importing...')
+import os
 from mpl_tools import is_notebook_or_qt as nb
 import argparse
-# print('da')
+import numpy as np
+t = time.time()
+print(f'[demo_Straka1993.py] Importing packages took {t-s:.2f} seconds.')
+# import dapper as dpr 
+from dapper import set_seed, xpList, load_xps, xpSpace
+tt = time.time()
+print(f'[demo_Straka1993.py] Importing dapper took {tt-t:.2f} seconds.')
 import dapper.da_methods as da
-# print('Straka')
-from dapper.mods.PyCLES.Straka1993 import create_HMM, set_X0_and_simulate, Np, dists_prior, plot_xt # incl HMM
-# print('PyCLES')
-from dapper.mods.PyCLES import * # load_xps, print_summary, dists_single_xp, plot_dists
+t = time.time()
+print(f'[demo_Straka1993.py] Importing da_methods took {t-tt:.2f} seconds.')
+# from dapper.mods.PyCLES.Straka1993 import create_HMM, set_X0_and_simulate, Np, dists_prior, plot_field
+import dapper.mods.PyCLES.Straka1993 as S93
+tt = time.time()
+print(f'[demo_Straka1993.py] Importing Straka1993 took {tt-t:.2f} seconds.')
+from dapper.mods.PyCLES import print_summary, plot_dists_prior, plot_dists_xps_onerow
+t = time.time()
+print(f'[demo_Straka1993.py] Importing PyCLES took {t-tt:.2f} seconds.')
 print('[demo_Straka1993.py] Importing done.')
 
+np.random.seed(325)
+set_seed(3000)
+
 def set_up_experiments(N_ens):
-    xps = dpr.xpList()
-    # xps += da.PartFilt(N=1000, reg=1)
+    xps = xpList()
+    # xps += PartFilt(N=1000, reg=1)
     ''' On the ensemble size
     - N>= 2 as we need N-1 for variances
     - One model eval more used for data generation in set_X0_and_simulate()
@@ -26,19 +45,17 @@ def launch_experiments(HMM,xps):
     # XXX caution with large ensembles!
     scriptname = HMM.name if nb else __file__
     save_as = xps.launch(
-        HMM, scriptname, setup=set_X0_and_simulate,
-        mp=False,           # Multiprocessing
+        HMM, scriptname, setup=S93.set_X0_and_simulate,
+        # mp=False,           # Multiprocessing
         fail_gently=True,  # Facilitate debugging
         liveplots=False,    # NB: Turn off if running iEnKS
         free=False,         # Don't delete time series (enables replay)
     )
     return save_as
 
-def plot_obs_examples(HMM,xps,plot_dir):
-    HMM, xx, yy = set_X0_and_simulate(HMM,xps[0])
-    plot_xt(yy[0],plot_dir)
-
-
+def plot_obs_examples(HMM,xps,dir):
+    HMM, xx, yy = S93.set_X0_and_simulate(HMM,xps[0])
+    S93.plot_field(yy[0],dir)
 
 if __name__=='__main__':
     
@@ -49,39 +66,50 @@ if __name__=='__main__':
                         help='Type ob obervations, see Straka1993.py')
     parser.add_argument('-N','--N_ens', type=int, default=20,
                         help='Number of ensemble members (>=2)')
+    # parser.add_argument('-T','--T', type=int, default=900, required=False,
+                        # help='Final simulation time')
+    parser.add_argument('--dx', type=int, default=200, required=False,
+                        help='Grid spacing of the model (m)')
+    # parser.add_argument('--mp', type=int, default=0, required=False,
+                        #  help='Number of parallel member computations. Default: mp=N_ens.')
     args = parser.parse_args()
     
-    plot_dir = args.path # '/cluster/work/climate/dgrund/working_dir/24-01-07_dapper_straka/T900_fullobs_obsstd0.1/'
-    data_dir = plot_dir + 'data/'
-    if not os.path.isdir(plot_dir):
-        os.mkdir(plot_dir)
+    args.T = 900 # hard-coded in observations!
+    
+    dir = args.path
+    data_dir = dir + 'data/'
+    plot_dir = dir + 'plots/'
+    if not os.path.isdir(dir):
+        os.mkdir(dir)
     if not os.path.isdir(data_dir):
         os.mkdir(data_dir)
+    if not os.path.isdir(plot_dir):
+        os.mkdir(plot_dir)
     
     N_ens = args.N_ens
     obs_type = args.obs_type
+    # if args.mp == 0:
+    #     args.mp = N_ens
 
     print('Call create_HMM...')
-    HMM = create_HMM(mp=N_ens, data_dir=data_dir, obs_type=obs_type) # all members in parallel
+    HMM = S93.create_HMM(data_dir=data_dir, obs_type=obs_type, t_max=args.T, dx=args.dx)
 
     print('Call set_up_experiments...')
     xps = set_up_experiments(N_ens)
-    plot_dists_prior(dists_prior, plot_dir, Np)
+    plot_dists_prior(S93.dists_prior, plot_dir, S93.Np)
 
-    # plot_obs_examples(HMM,xps,plot_dir)
+    # plot_obs_examples(HMM,xps,dir)
     
     print('Call launch_experiments...')
     save_as = launch_experiments(HMM,xps)
     
     print('Call load_xps...')
-    xps = load_xps(save_as)
-    print_summary(xps,Np,dists_prior)
+    xps = xpList(load_xps(save_as))
+    print_summary(xps,S93.Np,S93.dists_prior)
 
     # Associate each control variable with a "coordinate"
-    xp_dict = dpr.xpSpace.from_list(xps)
+    # xp_dict = xpSpace.from_list(xps)
 
     # plot prior+post distributions
-    # plot_dists_xps(xps, dists_prior, plot_dir, Np)
-    plot_dists_xps_onerow(xps, dists_prior, plot_dir, Np)
+    plot_dists_xps_onerow(xps, S93.dists_prior, plot_dir, S93.Np)
     
-    # plot_target_function()

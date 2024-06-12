@@ -3,117 +3,204 @@ Interface to models using PyCLES and common functionality for 2D states and 2 sc
 '''
 
 import numpy as np
-# print('dpr')
-import dapper as dpr
-# print('plt')
 import matplotlib.pyplot as plt
 import scipy.stats as stats
 import os
 import shutil
+import time
 
-data_dir = '/cluster/work/climate/dgrund/working_dir/dpr_data/data_Straka1993/'
+default_dir = '/cluster/work/climate/dgrund/working_dir/dpr_data/data_Straka1993/'
 # import dapper.mods as modelling
 # import dapper.tools.liveplotting as LP
-import dapper.tools.multiproc as multiproc
+# import dapper.tools.multiproc as multiproc
 
-class pycles_model_config:
+class PyCLES_interface:
     '''Interface class.
     
     XXX
     '''
 
-    def __init__(self, name, mp=False, plot_every_member=False, p=None):
-        """Use `prms={}` to get the default configuration."""
-        # Insert prms. Assert key is present in defaults.
-        # infile_specs = default_infile_specs.copy()
-        # for key in prms:
-            # assert key in infile_specs
-            # infile_specs[key] = prms[key]
+    def __init__(
+        self, 
+        name,
+        # mp=False, 
+        plot_every_member=False, 
+        data_dir=None,
+        obs_func=None, 
+        t_max=900,
+        dx=200, 
+        No=None, 
+        Np=None
+    ):
+        """submits a job for each member, so automatically parallelizing, no mp keyword needed"""
 
-        # self.infile_specs  = default_infile_specs
-        # self.infile_base = make_infile(self.infile_specs)
-        self.mp    = mp # False or int; set externally
+        # PyCLES
         self.name  = name
-        self.p = p if p else data_dir # adapt externally
         self.plot_every_member = plot_every_member # plot the data
+        self.obs_func = obs_func
+        self.t_max = t_max
+        self.dx = dx
+        
+        # DAPPER
+        assert No is not None and Np is not None, "No and Np need to be set!"
+        # self.Nx = Nx # state ### not used
+        self.No = No # observations
+        self.Np = Np # parameters
+        self.M = self.No + self.Np # extended state as seen by DAPPER
+        
+        # directories
+        self.data_dir = data_dir if data_dir else default_dir # adapt externally
+        self.make_truth_dir()
+        self.member_dirs = [] # will be set in step
 
-        ## need to be set!
-        # self.M = 1 # state components in E
-        # self.P = 2 # parameter components in E
+    def start_simulation(
+        self, E_1, t, dt, dir
+    ):        
+        # --- split state and parameters
+        assert len(E_1) == self.M
+        x0 = E_1[:self.No]
+        params = E_1[self.No:]
+        
+        v,d = params
+        specs = {
+            'v':v,
+            'd':d,
+            'p':dir,
+            'r':self.dx,
+            't_max':self.t_max,
+        }
 
-    def step_1(self, E_1, t, dt, dir):
-        """Step a single state vector."""
-        # assert self.infile_specs["t_max"] == dt # DA time step
-        assert np.isfinite(t)           # final time
+        # --- simulate
+        submit_pycles_job(specs)
+        return params
+        
+    def get_result_and_observe(self, dir, params):
+        
 
-        # split
-        assert len(E_1) == self.M+self.P
-        x0 = E_1[:self.M]
-        params = E_1[self.M:]
-
-        x_t = self.call(x0, params, t, dt, dir, do_plot=self.plot_every_member)
-        return x_t
+        # --- wait for computation to finish
+        max_waiting_time = 360 # s
+        waiting_interval = 3 # s
+        time_elapsed = 0 # s
+        results_file = None
+        
+        while results_file is None:
+            time.sleep(3)
+            time_elapsed += waiting_interval
+            if time_elapsed > max_waiting_time:
+                print('[PyCLES.__init__.py] Timeout while waiting for result in ',dir)
+                break
+            
+            results_file = get_results_file(dir,self.t_max)
     
+        print(f'[PyCLES.__init__.py] Found results_file: ',results_file)
+        
+        # --- observe
+        obs_t = self.obs_func(results_file, dir, self.plot_every_member)        
+
+        # --- concatenate state
+        extended_state = np.concatenate([obs_t.ravel(),params])
+        return extended_state # 1D array
+
     def step(self, E, t, dt):
         """Function needed for Dyn syntax: Dyn = {'model':model.step}
         Vector and 2D-array (ens) input, with multiproc for ens case."""
         if E.ndim == 1:
-            print('[PyCLES.__init__.py] DAPPER-PyCLES in NON-PARALLEL MODE (one member only)')
-            data_dir = self.make_data_dir()
-            E = self.step_1(E, t, dt, data_dir)
+            ### assumes only the data generation is called single!!
+            print(f'[PyCLES.__init__.py] Starting single simulation on dir=self.truth_dir={self.truth_dir}.')
+            params = self.start_simulation(E, t=t, dt=dt, dir=self.truth_dir)
+            E = self.get_result_and_observe(self.truth_dir, params)
+            
             return E
         
         if E.ndim == 2:
 
-            member_dirs = self.make_ensemble_dirs(N_ens=E.shape[0])
-
-            if self.mp > 1:  # PARALLELIZED:
-                print('[PyCLES.__init__.py] DAPPER-PyCLES in PARALLEL MODE')
-                def call_step_1(n):
-                    return self.step_1(
-                        E[n], t=t, dt=dt, 
-                        dir=member_dirs[n]
-                    )
-                print('[PyCLES.__init__.py] Using HMM.mp=',self.mp)
-                with multiproc.Pool(self.mp) as pool:
-                    E = pool.map(lambda x: call_step_1(x), [i for i in range(self.mp)])
-                E = np.array(E)
-            else:  # NON-PARALLELIZED:
-                print('[PyCLES.__init__.py] DAPPER-PyCLES in NON-PARALLEL MODE')
-                for n, x in enumerate(E):
-                    print(f'Running ensemble member {n}.')
-                    E[n] = self.step_1(
-                        x, t, dt, 
-                        member_dirs[n]
-                    )
-            print('[PyCLES.__init__.py] E.shape: ',E.shape)
+            self.member_dirs = self.make_member_dirs(N_ens=E.shape[0])
+            
+            params_list = []
+            for n,dir in enumerate(self.member_dirs):
+                params = self.start_simulation(E[n], t=t, dt=dt, dir=dir)
+                params_list.append(params)
+            
+            E = []
+            for n,dir in enumerate(self.member_dirs):
+                E.append(
+                    self.get_result_and_observe(dir, params_list[n])
+                )
+            E = np.array(E)
+                
             return E
 
-    def make_ensemble_dirs(self, N_ens):
-        dirs = os.listdir(self.p)
+    def make_member_dirs(self, N_ens):
+        '''The data generated by the ensemble members.'''
+        dirs = os.listdir(self.data_dir)
         dir_start = max([int(d) for d in dirs] + [0]) + 1
-        member_dirs = [f'{self.p}{dir_start+n}/' for n in range(N_ens)]
-        # data gen dir is the first (1 if self.p was empty)
+        member_dirs = [f'{self.data_dir}{dir_start+n}/' for n in range(N_ens)]
+        # data gen dir is the first (1 if self.data_dir was empty)
         for p in member_dirs:
             os.mkdir(p)
+        print(f'[PyCLES.__init__.py] Made {len(member_dirs)} member dirs starting with {member_dirs[0]}')
         return member_dirs
 
-    def make_data_dir(self):
-        data_dir = self.p+'0/'
-        if os.path.isdir(data_dir):
-            shutil.rmtree(data_dir)
-        os.mkdir(data_dir)
-        return data_dir
+    def make_truth_dir(self):
+        '''The true data.'''
+        truth_dir = self.data_dir+'0/'
+        if os.path.isdir(truth_dir):
+            shutil.rmtree(truth_dir)
+        os.mkdir(truth_dir)
+        print(f'[PyCLES.__init__.py] Made truth dir {truth_dir}')
+        self.truth_dir = truth_dir
+    
+def get_results_file(dir,t_max):
+    files = os.listdir(dir)
+    OutDir = None
+    for f in files:
+        if f[:3] == 'Out':
+            OutDir = f
+    if OutDir is None:
+        # computation did not start yet
+        return None
+    else:
+        results_file = f'{dir}{OutDir}/fields/{t_max}.nc'
+        if os.path.exists(results_file):
+            # computation finished
+            return results_file
+        else:
+            # computation did not finish yet
+            return None
 
-    def call(self, x0, params, t, dt):
-        # XXX specify for each experiment
-        pass
+    
+def submit_pycles_job(specs):
+    '''Submits the sample as a job but does not wait for completion'''
+    call_script = '/cluster/work/climate/dgrund/git/dana-grund/DAPPER/dapper/mods/PyCLES/Straka1993_call_job.sh'
+    p = specs['p']
+    cwd = os.getcwd()
+    os.chdir(p)
 
+    # delete content in case repeted run  # XXX only outdir!
+    for root, dirs, files in os.walk(p):
+        for f in files:
+            os.remove(os.path.join(root, f))
+        for d in dirs:
+            shutil.rmtree(os.path.join(root, d))
+    write_to_bash_variables(p,specs)
+    
+    os.system(f'bash {call_script} {p}')
+    os.chdir(cwd)
 
-
-def load_xps(save_as):
-    xps = dpr.xpList(dpr.load_xps(save_as))
-    return xps
+def write_to_bash_variables(dir,specs):
+    VARS = dict(
+        # case_name           = 'CASE_NAME',
+        v                   = 'V',
+        d                   = 'D',
+        r                   = 'R',
+        t_max               = 'T',
+        p                   = 'ENS_DIR',
+        variable            = 'variable',
+    )
+    for var in specs.keys():
+        text = f'{VARS[var]}={specs[var]}\n'
+        with open(dir+'parameters.sh','a+') as f:
+            f.write(text)
 
 def print_summary(xps, Np, dists_prior):
 
@@ -134,10 +221,6 @@ def print_summary(xps, Np, dists_prior):
     print('\nPRIOR')
     print(f'prior mean:\t{dists_prior["PRIOR_MEAN_PARAMS"]}')
     print(f'prior var:\t{dists_prior["PRIOR_VAR_PARAMS"]}')
-
-    print('\nFORECAST') # taken from a random experiment
-    print(f'mean:\t{dists["POST_MEAN_FOREC"]}')
-    print(f'spread:\t{dists["POST_VAR_FOREC"]}')
     
     print('\nTRUTH')
     print(f'True params:\t{dists_prior["TRUE_PARAMS"]}')
@@ -175,10 +258,11 @@ def plot_norm(ax, mu, var, label, linestyle='-'):
 def plot_dists_prior(*args, **kwargs):
     plot_dists_xps([],*args, post=False, **kwargs)
 
-# missing: obs
-# missing: case 1 xp
-def plot_dists_xps(xps, dists_prior, plot_dir, Np, post=True):
 
+def plot_dists_xps(xps, dists_prior, plot_dir, Np, post=True):
+    # missing: obs
+    # missing: case 1 xp
+    
     n_xps = len(xps) # test
     if n_xps == 0:
         fig, axs = plt.subplots(Np, figsize=(Np*4, 3))
