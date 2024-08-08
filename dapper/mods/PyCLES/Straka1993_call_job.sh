@@ -12,7 +12,6 @@ ENSEMBLE_RUNNER=${PYCLES_DIR_ADD}run_ensemble.py
 
 ### input: ensemble directory
 ENS_DIR=${1:-'./'}
-echo Found ENS_DIR = $ENS_DIR
 
 ### activate environment
 source /cluster/work/climate/dgrund/git/dana-grund/doctorate_code/euler/euler_setup_template.sh
@@ -36,7 +35,11 @@ python $NAMELIST_GENERATOR StableBubble \
     --meas_locs 10000 0 500 \
     --meas_locs 10000 0 2000 \
     --meas_locs 20000 0 500 \
-    --meas_locs 20000 0 2000
+    --meas_locs 20000 0 2000 \
+    --collapse_y \
+    --only_T_anomaly \
+    --half_x
+    # --skip_vels
     
 ### submit in a job
 ID=$(sbatch \
@@ -49,4 +52,4 @@ ID=$(sbatch \
     --error=slurm.err \
     --wrap="python $ENSEMBLE_RUNNER -p $ENS_DIR > ${ENS_DIR}pycles.out" \
     )
-echo Submitted ID=$ID
+echo Submitted ID=$ID for ENS_DIR=$ENS_DIR

@@ -169,10 +169,6 @@ def obs_timeseries(results_file, p_, do_plot=False):
     # Nvars = len(variables)
     # Nlocs = len(meas_locs)
     # No = Ntimes * Nvars * Nlocs # 1092
-        
-    if do_plot: # full state
-        x_t = get_field_from_file(results_file)
-        plot_field(x_t,p_,name_add='full')
     
     FieldsDir, _ = os.path.split(results_file)
     OutDir = os.path.abspath(os.path.join(FieldsDir, os.pardir))
@@ -194,11 +190,11 @@ def obs_timeseries(results_file, p_, do_plot=False):
         plot_evol(
             OutDir,
             p_,
-            variable='temperature', # temperature_anomaly
-            times=[0,T], # add more
+            variable='temperature_anomaly',
+            times=[0,300,600,900], # XXX hard-coded
             cmap='turbo',
             title='',
-            meas_locs=[],
+            meas_locs=meas_locs,
         )
         
     return np.array(time_series).ravel()    
@@ -227,17 +223,17 @@ def No_by_obs(obs_type, t_max=None, dt=10, n_vars=1):
 # Dynamics
 ############################
 
-def create_Dyn(data_dir,obs_type, t_max, dx=50, No=None):
+def create_Dyn(data_dir,obs_type, t_max, dx=50, No=None, plot=False):
     obs_func = obs_funcs[obs_type]
     model = PyCLES_interface(
         name="Straka1993",
-        # mp=mp, 
         data_dir=data_dir, 
         obs_func=obs_func,
         t_max=t_max,
         dx=dx,
         No=No,
         Np=Np,
+        plot=plot,
     )
     Dyn = {
         'M': model.M, # state size as output by model.step
@@ -292,16 +288,16 @@ def create_Obs(No):
 # Final model
 ############################
 
-def create_HMM(data_dir=None, obs_type='full', t_max=900, dx=50):
+def create_HMM(data_dir=None, obs_type='full', t_max=900, dx=50, plot=False):
 
     No = No_by_obs(obs_type, t_max=t_max)
-    Dyn = create_Dyn(data_dir=data_dir,obs_type=obs_type, t_max=t_max, dx=dx, No=No)
+    Dyn = create_Dyn(data_dir=data_dir,obs_type=obs_type, t_max=t_max, dx=dx, No=No, plot=plot)
     Obs = create_Obs(No)
 
     tseq = modelling.Chronology(dt=t_max, dko=1, T=t_max, BurnIn=0)
     
     parts = dict(state=np.arange(No),
-                param=np.arange(No)+Np)
+                param=np.arange(No)+Np) ### XXX typo: np.arange(Np)+No
 
     HMM = modelling.HiddenMarkovModel(
         Dyn, Obs, tseq, 

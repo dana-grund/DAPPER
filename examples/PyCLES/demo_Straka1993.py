@@ -55,10 +55,6 @@ def launch_experiments(HMM,xps):
     )
     return save_as
 
-def plot_obs_examples(HMM,xps,dir):
-    HMM, xx, yy = S93.set_X0_and_simulate(HMM,xps[0])
-    plot_field(yy[0],dir)
-
 if __name__=='__main__':
     
     parser = argparse.ArgumentParser(prog='')
@@ -72,8 +68,8 @@ if __name__=='__main__':
                         # help='Final simulation time')
     parser.add_argument('--dx', type=int, default=200, required=False,
                         help='Grid spacing of the model (m)')
-    # parser.add_argument('--mp', type=int, default=0, required=False,
-                        #  help='Number of parallel member computations. Default: mp=N_ens.')
+    parser.add_argument('--plot', action=argparse.BooleanOptionalAction,
+                        help='Plot observations of each member')
     args = parser.parse_args()
     
     args.T = 900 # hard-coded in observations!
@@ -90,18 +86,14 @@ if __name__=='__main__':
     
     N_ens = args.N_ens
     obs_type = args.obs_type
-    # if args.mp == 0:
-    #     args.mp = N_ens
 
     print('Call create_HMM...')
-    HMM = S93.create_HMM(data_dir=data_dir, obs_type=obs_type, t_max=args.T, dx=args.dx)
+    HMM = S93.create_HMM(data_dir=data_dir, obs_type=obs_type, t_max=args.T, dx=args.dx, plot=args.plot)
 
     print('Call set_up_experiments...')
     xps = set_up_experiments(N_ens)
     plot_dists_prior(S93.dists_prior, plot_dir, S93.Np)
 
-    # plot_obs_examples(HMM,xps,dir)
-    
     print('Call launch_experiments...')
     save_as = launch_experiments(HMM,xps)
     

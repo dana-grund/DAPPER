@@ -10,6 +10,7 @@ import shutil
 import time
 
 default_dir = '/cluster/work/climate/dgrund/working_dir/dpr_data/data_Straka1993/'
+nx, nz = 256, 32    # resolution in pycles fixed to dx=dz=200
 
 class PyCLES_interface:
     '''Interface class.
@@ -20,19 +21,19 @@ class PyCLES_interface:
     def __init__(
         self, 
         name,
-        plot_every_member=False, 
         data_dir=None,
         obs_func=None, 
         t_max=900,
         dx=200, 
         No=None, 
-        Np=None
+        Np=None,
+        plot=False, 
     ):
         """submits a job for each member, so automatically parallelizing, no mp keyword needed"""
 
         # PyCLES
         self.name  = name
-        self.plot_every_member = plot_every_member # plot the data
+        self.plot = plot # plot obs of each member
         self.obs_func = obs_func
         self.t_max = t_max
         self.dx = dx
@@ -96,7 +97,7 @@ class PyCLES_interface:
         print(f'[PyCLES.__init__.py] Found results_file: ',results_file)
         
         # --- observe
-        obs_t = self.obs_func(results_file, dir, self.plot_every_member)        
+        obs_t = self.obs_func(results_file, dir, self.plot)        
         
         # --- parameter-only formulation
         state = obs_t.ravel()
@@ -119,7 +120,7 @@ class PyCLES_interface:
         
         if E.ndim == 2:
 
-            self.member_dirs = self.make_member_dirs(N_ens=E.shape[0])
+            self.make_member_dirs(N_ens=E.shape[0])
             
             # --- start all member simulations
             params_list = []
@@ -146,7 +147,7 @@ class PyCLES_interface:
         for p in member_dirs:
             os.mkdir(p)
         print(f'[PyCLES.__init__.py] Made {len(member_dirs)} member dirs starting with {member_dirs[0]}')
-        return member_dirs
+        self.member_dirs = member_dirs
 
     def make_truth_dir(self):
         '''The true data.'''
@@ -175,7 +176,6 @@ def get_results_file(dir,t_max):
             # computation did not finish yet
             return None
 
-    
 def submit_pycles_job(specs):
     '''Submits the sample as a job but does not wait for completion'''
     call_script = '/cluster/work/climate/dgrund/git/dana-grund/DAPPER/dapper/mods/PyCLES/Straka1993_call_job.sh'
@@ -265,7 +265,6 @@ def plot_norm(ax, mu, var, label, linestyle='-'):
 def plot_dists_prior(*args, **kwargs):
     plot_dists_xps([],*args, post=False, **kwargs)
 
-
 def plot_dists_xps(xps, dists_prior, plot_dir, Np, post=True):
     # missing: obs
     # missing: case 1 xp
@@ -310,7 +309,6 @@ def plot_dists_xp(axs, dists, dists_prior, Np, post, leftylabel=''):
 
     axs[0].set_ylabel(leftylabel)
 
-
 def plot_dists_xps_onerow(xps, dists_prior, plot_dir, Np, post=True):
 
     fig, axs = plt.subplots(1, Np, figsize=(Np*4, 3))
@@ -343,7 +341,9 @@ def plot_dists_xps_onerow(xps, dists_prior, plot_dir, Np, post=True):
     plt.show()
 
 def plot_field(x_t,plot_dir,name_add=''):
-    # full field
+    '''
+    replace by PyCLES handling class
+    '''
     
     field = x_t.reshape((nx,nz)) if len(x_t.shape) == 1 else x_t
     # x_space = np.arange(25.6,36,0.2) # km
