@@ -31,7 +31,8 @@ from dapper.tools.progressbar import progbar
 class Stats(series.StatPrint):
     """Contains and computes statistics of the DA methods."""
 
-    def __init__(self, xp, HMM, xx, yy, liveplots=False, store_u=rc.store_u):
+    def __init__(self,
+        xp, HMM, xx, yy, liveplots=False, store_u=rc.store_u):
         """Init the default statistics."""
         ######################################
         # Preamble
@@ -44,7 +45,8 @@ class Stats(series.StatPrint):
         self.store_u   = store_u
         self.store_s   = any(key in xp.__dict__ for key in
                              ["Lag", "DeCorr"])  # prms used by smoothers
-
+        self.store_matrix = rc.store_matrix
+        
         # Shapes
         K  = xx.shape[0] - 1
         Nx = xx.shape[1]
@@ -117,6 +119,22 @@ class Stats(series.StatPrint):
         self.new_series('N_eff' , 1, Ko+1)
         self.new_series('wroot' , 1, Ko+1)
         self.new_series('resmpl', 1, Ko+1)
+
+        ######################################
+        # Allocate time series of ens/cov matrix
+        ######################################
+        if self.store_matrix:
+            if self._is_ens:
+                self.new_series('ensemble', (N, Nx))  # Full ensemble
+                print(
+                    f"Warning: Dapper will store the full ensemble matrix ({N}x{Nx})."
+                )
+            else:
+                self.new_series('covariance', (Nx, Nx))  # Full covariance matrix
+                print(
+                    f"Warning: Dapper will store the full cov matrix ({Nx}x{Nx})."
+                )
+            print("\tYou can change this by 'store_matrix: no' in dpr_config.yaml.")
 
     def new_series(self, name, shape, length='FAUSt', field_mean=False, **kws):
         """Create (and register) a statistics time series, initialized with `nan`s.
@@ -278,6 +296,10 @@ class Stats(series.StatPrint):
         if not np.all(np.isreal(E)):
             raise RuntimeError("Ensemble not Real.")
 
+        # full ensemble
+        if self.store_matrix:
+            now.ensemble = E
+
         # Compute errors
         now.err = now.mu - x
         if rc.comps['error_only']:
@@ -357,6 +379,10 @@ class Stats(series.StatPrint):
                 s2, U     = sla.eigh(P)
                 now.svals = np.sqrt(np.maximum(s2, 0.0))[::-1]
                 now.umisf = (U.T @ now.err)[::-1]
+
+        # Store full covariance matrix
+        if self.store_matrix:
+            now.covariance = P
 
         # Compute stddev
         now.spread = np.sqrt(var)
