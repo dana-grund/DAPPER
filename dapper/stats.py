@@ -20,6 +20,7 @@ import struct_tools
 from matplotlib import pyplot as plt
 from patlib.std import do_once
 from tabulate import tabulate
+import properscoring as ps
 
 import dapper.tools.liveplotting as liveplotting
 import dapper.tools.series as series
@@ -92,6 +93,7 @@ class Stats(series.StatPrint):
             N = xp.N
             self.new_series('w', N, field_mean=True)  # Importance weights
             self.new_series('rh', Nx, dtype=int)  # Rank histogram
+            self.new_series('crps'  , Nx, field_mean='sectors')  # Cont rank prob score
 
             self._is_ens = True
             minN = min(Nx, N)
@@ -330,6 +332,9 @@ class Stats(series.StatPrint):
         now.kurt = np.nanmean(w @ A_pow / var**2 - 3)
 
         now.mad  = np.nanmean(w @ abs(A))
+
+        # Continuous ranked probability score
+        now.crps = ps.crps_ensemble(x, E.T)
 
         if self.do_spectral:
             if N <= Nx:

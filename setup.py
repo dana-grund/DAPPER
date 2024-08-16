@@ -28,6 +28,7 @@ INSTALL_REQUIRES = [
     'matplotlib~=3.7',
     'mpl-tools==0.2.50',
     'tqdm~=4.31',
+    'properscoring==0.1',
     'pyyaml',
     'colorama~=0.4.1',
     'tabulate~=0.8.3',
