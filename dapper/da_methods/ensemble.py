@@ -8,6 +8,7 @@ import dapper.tools.multiproc as multiproc
 from dapper.stats import center, inflate_ens, mean0
 from dapper.tools.linalg import mldiv, mrdiv, pad0, svd0, svdi, tinv, tsvd
 from dapper.tools.matrices import funm_psd, genOG_1
+from dapper.tools.nans import NanCropper
 from dapper.tools.progressbar import progbar
 from dapper.tools.randvars import GaussRV
 from dapper.tools.seeding import rng
@@ -47,9 +48,17 @@ class EnKF:
             # Analysis update
             if ko is not None:
                 self.stats.assess(k, ko, 'f', E=E)
-                E = EnKF_analysis(E, HMM.Obs(ko)(E), HMM.Obs(ko).noise, yy[ko],
+
+                Eo = HMM.Obs(ko)(E)
+                nan_cropper = NanCropper(Eo)  # diagnose nans in observations
+                E = nan_cropper.crop(E)  # crop state
+                Eo = nan_cropper.crop(Eo)  # crop observations
+
+                E = EnKF_analysis(E, Eo, HMM.Obs(ko).noise, yy[ko],
                                   self.upd_a, self.stats, ko)
                 E = post_process(E, self.infl, self.rot)
+
+                E = nan_cropper.uncrop(E)
 
             self.stats.assess(k, ko, E=E)
 

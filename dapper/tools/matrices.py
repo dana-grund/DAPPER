@@ -7,6 +7,7 @@ import scipy.linalg as sla
 from numpy import ones, sqrt, zeros
 
 from dapper.tools.linalg import mrdiv, svd0, truncate_rank
+from dapper.tools.nans import crop_nans
 from dapper.tools.seeding import rng
 
 
@@ -215,6 +216,7 @@ class CovMat():
         """
         # Cascade if's down to 'Right'
         if kind == 'E':
+            data = crop_nans(data)
             mu      = np.mean(data, 0)
             data    = data - mu
             kind    = 'A'

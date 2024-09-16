@@ -26,6 +26,7 @@ import dapper.tools.liveplotting as liveplotting
 import dapper.tools.series as series
 from dapper.dpr_config import rc
 from dapper.tools.matrices import CovMat
+from dapper.tools.nans import NanCropper
 from dapper.tools.progressbar import progbar
 
 
@@ -276,6 +277,18 @@ class Stats(series.StatPrint):
 
     def assess_ens(self, now, x, E, w):
         """Ensemble and Particle filter (weighted/importance) assessment."""
+        # Full ensemble
+        if self.store_matrix:
+            now.ensemble = E
+
+        # Crash checks - crop samples that are nan
+        nan_cropper = NanCropper(E)
+        E = nan_cropper.crop(E)
+        if len(E) == 0 or not np.all(np.isfinite(E)):
+            raise RuntimeError("Ensemble not finite.")
+        if not np.all(np.isreal(E)):
+            raise RuntimeError("Ensemble not Real.")
+
         N, Nx = E.shape
 
         # weights
@@ -287,20 +300,10 @@ class Stats(series.StatPrint):
             # The savings are noticeable when rc.comps['error_only'] is noticeable.
             now.mu = E.mean(0)
         else:
-            now.w = w
             if abs(w.sum()-1) > 1e-5:
                 raise RuntimeError("Weights did not sum to one.")
             now.mu = w @ E
-
-        # Crash checks
-        if not np.all(np.isfinite(E)):
-            raise RuntimeError("Ensemble not finite.")
-        if not np.all(np.isreal(E)):
-            raise RuntimeError("Ensemble not Real.")
-
-        # full ensemble
-        if self.store_matrix:
-            now.ensemble = E
+            now.w = nan_cropper.uncrop(w)
 
         # Compute errors
         now.err = now.mu - x
@@ -340,8 +343,8 @@ class Stats(series.StatPrint):
             if N <= Nx:
                 _, s, UT  = sla.svd((np.sqrt(w)*A.T).T, full_matrices=False)
                 s        *= np.sqrt(ub)  # Makes s^2 unbiased
-                now.svals = s
-                now.umisf = UT @ now.err
+                now.svals = nan_cropper.uncrop(s)
+                now.umisf = nan_cropper.uncrop(UT @ now.err)
             else:
                 P         = (A.T * w) @ A
                 s2, U     = sla.eigh(P)
