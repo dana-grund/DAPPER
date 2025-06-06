@@ -51,14 +51,14 @@ class EnKF:
 
                 Eo = HMM.Obs(ko)(E)
                 nan_cropper = NanCropper(Eo)  # diagnose nans in observations
-                E = nan_cropper.crop(E)  # crop state
-                Eo = nan_cropper.crop(Eo)  # crop observations
+                E = nan_cropper.crop(E)       # crop state
+                Eo = nan_cropper.crop(Eo)     # crop observations
 
                 E = EnKF_analysis(E, Eo, HMM.Obs(ko).noise, yy[ko],
                                   self.upd_a, self.stats, ko)
                 E = post_process(E, self.infl, self.rot)
 
-                E = nan_cropper.uncrop(E)
+                E = nan_cropper.uncrop(E)    # insert nans for missing posterior samples
 
             self.stats.assess(k, ko, E=E)
 
